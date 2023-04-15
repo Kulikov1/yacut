@@ -1,8 +1,7 @@
 import string
 import random
-import re
 
-from flask import abort, flash, redirect, render_template
+from flask import flash, redirect, render_template
 
 from . import app, db
 from .constants import LEN_RANDOM_SHORT, MAIN_URL
@@ -28,13 +27,13 @@ def index_view():
     form = URLMapForm()
     if form.validate_on_submit():
         short = form.custom_id.data
-        if short is None:
-            short = get_unique_short_id()
-        if not short.isalnum() or re.search(r'[а-яА-ЯёЁ]', short):
-            abort(400)
         if URLMap.query.filter_by(short=short).first():
             flash(f'Имя {short} уже занято!')
             return render_template('index.html', form=form)
+        if short is None or len(short) == 0:
+            short = get_unique_short_id()
+            while URLMap.query.filter_by(short=short).first():
+                short = get_unique_short_id()
         urlmap = URLMap(
             original=form.original_link.data,
             short=short,
@@ -47,12 +46,10 @@ def index_view():
 
 @app.route('/<short>')
 def redirect_view(short):
-    """Вью-функция эндпоинта и именем короткой ссылки.
+    """Вью-функция эндпоинта с именем короткой ссылки.
     Если короткое имя ссылки есть в базе, то функция редиректит
     пользователя на оригинальную ссылку
     """
 
-    url = URLMap.query.filter_by(short=short).first()
-    if url is None:
-        abort(404)
-    return redirect(url.original, 302)
+    url = URLMap.query.filter_by(short=short).first_or_404()
+    return redirect(url.original)

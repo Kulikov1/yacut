@@ -1,9 +1,10 @@
 import re
+from http import HTTPStatus
 
 from flask import request
 
 from . import app, db
-from .constants import PATTERN_CYRILLIC
+from .constants import PATTERN_SHORT, LEN_USER_SHORT
 from .error_handlers import InvalidAPIUsage
 from .models import URLMap
 from .views import get_unique_short_id
@@ -18,20 +19,14 @@ def add_custom_id():
         raise InvalidAPIUsage('Отсутствует тело запроса')
     if 'url' not in data:
         raise InvalidAPIUsage('"url" является обязательным полем!')
-    if (
-        'custom_id' not in data or data['custom_id'] is None or
-        data['custom_id'] == '' or len(data['custom_id']) == 0
-    ):
+    if 'custom_id' not in data or not(data['custom_id']):
         data['custom_id'] = get_unique_short_id()
-    if (
-        not data['custom_id'].isalnum() or
-        re.search(PATTERN_CYRILLIC, data['custom_id'])
-    ):
+    if not(re.match(PATTERN_SHORT, data['custom_id'])):
         raise InvalidAPIUsage(
             'Указано недопустимое имя для короткой ссылки',
-            400
+            HTTPStatus.BAD_REQUEST
         )
-    if len(data['custom_id']) > 16:
+    if len(data['custom_id']) > LEN_USER_SHORT:
         raise InvalidAPIUsage('Указано недопустимое имя для короткой ссылки')
     name = data['custom_id']
     if URLMap.query.filter_by(short=data['custom_id']).first() is not None:
@@ -40,7 +35,7 @@ def add_custom_id():
     url.from_dict(data)
     db.session.add(url)
     db.session.commit()
-    return url.to_dict(), 201
+    return url.to_dict(), HTTPStatus.CREATED
 
 
 @app.route('/api/id/<short_id>/', methods=['GET'])
@@ -51,5 +46,5 @@ def get_original_url(short_id):
 
     url = URLMap.query.filter_by(short=short_id).first()
     if url is None:
-        raise InvalidAPIUsage('Указанный id не найден', 404)
-    return {'url': url.original}, 200
+        raise InvalidAPIUsage('Указанный id не найден', HTTPStatus.NOT_FOUND)
+    return {'url': url.original}, HTTPStatus.OK
